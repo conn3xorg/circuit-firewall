@@ -17,6 +17,7 @@ module "firewall" {
   allow = [
     { port = "80/tcp" },
     { port = "443/tcp" },
+    { port = "60000:61000/udp" },
     { port = "9100/tcp", from = "10.0.0.0/8" },
   ]
 }

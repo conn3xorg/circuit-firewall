@@ -26,7 +26,7 @@ locals {
   rich = {
     for k, r in local.rules : k => format(
       "rule family=%s source address=%s port port=%s protocol=%s accept",
-      strcontains(r.from, ":") ? "ipv6" : "ipv4", r.from, split("/", r.port)[0], split("/", r.port)[1],
+      strcontains(r.from, ":") ? "ipv6" : "ipv4", r.from, replace(split("/", r.port)[0], ":", "-"), split("/", r.port)[1],
     ) if r.from != null
   }
 
@@ -129,7 +129,8 @@ circuit "firewalld" {
   step "rules" {
     for_each = { for k, r in local.rules : k => r if r.from == null }
     firewalld {
-      port = item.value.port
+      # firewalld writes a range as 6000-6007, ufw as 6000:6007.
+      port = replace(item.value.port, ":", "-")
     }
   }
 

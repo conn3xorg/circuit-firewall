@@ -73,7 +73,7 @@ Docker publishes container ports through its own iptables rules, which bypass uf
 | --- | --- | --- | --- |
 | `hosts` | any | Required | Hosts to configure, by name. Each value is an address, such as `"203.0.113.10"`, or a host object such as `{ address = "203.0.113.10", host_key = "ssh-ed25519 AAAA..." }`. A host object can also set `user`, `port`, `private_key_file` and `jump_hosts`. The two forms can be mixed. |
 | `allow` | list(object) | `[]` | Ports to open, each with a protocol, such as `{ port = "443/tcp" }`, or `{ port = "5432/tcp", from = "10.0.0.0/8" }` to open it to one address or network. A range is written `6000:6007/tcp`. |
-| `ssh_allow` | list(string) | `null` | Ports sshd listens on, such as `["22/tcp"]`. When null, the ports Conn3x logs in on. |
+| `ssh_allow` | list(string) | `null` | Ports sshd listens on, such as `["22/tcp"]`. When null, the ports Conn3x logs in on. Can't be empty. |
 | `ssh_user` | string | `"root"` | User to log in as. |
 | `ssh_port` | number | `22` | SSH port. |
 | `ssh_private_key_file` | string | `null` | Path to a private key. When null, Conn3x uses the SSH agent. |
