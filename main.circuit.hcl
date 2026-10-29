@@ -12,9 +12,21 @@ data "conn3x_host" "facts" {
     jump_hosts       = try(each.value.jump_hosts, null)
     known_hosts_file = var.ssh_known_hosts_file
   }
+
+  lifecycle {
+    postcondition {
+      condition     = try(each.value.os, self.os_id) == self.os_id
+      error_message = "Host ${each.key} is ${self.os_id}, not the ${try(each.value.os, "")} its os says."
+    }
+  }
 }
 
 locals {
+  # A host object's os stands in for the facts of a host created in the
+  # same plan, which can't be read until it exists.
+  os     = { for name, h in var.hosts : name => try(h.os, data.conn3x_host.facts[name].os_id) }
+  family = { for name, o in local.os : name => contains(["debian", "ubuntu"], o) ? "debian" : "redhat" }
+
   # SSH stays open on every port Conn3x logs in on, so turning the
   # firewall on can't cut the connection. Behind a port forward, the port
   # sshd listens on differs, and ssh_allow names it.
@@ -30,8 +42,8 @@ locals {
     ) if r.from != null
   }
 
-  ufw_hosts       = { for name, h in var.hosts : name => h if data.conn3x_host.facts[name].os_family == "debian" }
-  firewalld_hosts = { for name, h in var.hosts : name => h if data.conn3x_host.facts[name].os_family == "redhat" }
+  ufw_hosts       = { for name, h in var.hosts : name => h if local.family[name] == "debian" }
+  firewalld_hosts = { for name, h in var.hosts : name => h if local.family[name] == "redhat" }
 }
 
 circuit "ufw" {
