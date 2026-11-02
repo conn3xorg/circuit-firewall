@@ -19,5 +19,6 @@ module "firewall" {
     { port = "443/tcp" },
     { port = "60000:61000/udp" },
     { port = "9100/tcp", from = "10.0.0.0/8" },
+    { port = "9101/tcp", from = "192.0.2.0/24" },
   ]
 }
