@@ -72,7 +72,26 @@ jobs:
           conn3x init
           conn3x apply -auto-approve
           conn3x plan -detailed-exitcode
-          sudo podman exec circuit-firewall sh -c 'if command -v ufw >/dev/null; then ufw status | grep -qx "Status: active" && [ "$(ufw show added | grep -c "^ufw allow")" = 5 ]; else [ "$(firewall-cmd --list-ports)" = "22/tcp 80/tcp 443/tcp 60000-61000/udp" ] && firewall-cmd --list-rich-rules | grep -q 10.0.0.0/8; fi'
+          sudo podman exec circuit-firewall sh -c 'if command -v ufw >/dev/null; then ufw status | grep -qx "Status: active" && [ "$(ufw show added | grep -c "^ufw allow")" = 6 ]; else [ "$(firewall-cmd --list-ports)" = "22/tcp 80/tcp 443/tcp 60000-61000/udp" ] && firewall-cmd --list-rich-rules | grep -q 10.0.0.0/8 && firewall-cmd --list-rich-rules | grep -q 192.0.2.0/24; fi'
+      # Every port tested has a listener behind it, so one that doesn't answer
+      # was stopped by the firewall. 9100 opens to 10.0.0.0/8, which holds the
+      # runner's bridge address; 9101 opens to 192.0.2.0/24, which doesn't.
+      - name: Check allowed ports answer from outside the host, and the rest don't
+        run: |
+          ip=$(sudo podman inspect -f '{{.NetworkSettings.IPAddress}}' circuit-firewall)
+          for p in 80 443 8081 9100 9101; do
+            sudo podman exec circuit-firewall systemd-run --unit="listen-$p" systemd-socket-activate -l "$p" -a --inetd /bin/true
+          done
+          sleep 2
+          reaches() { timeout 5 bash -c "exec 3<>/dev/tcp/$ip/$1" 2>/dev/null; }
+          check() {
+            for p in 8081 9101; do sudo podman exec circuit-firewall bash -c "exec 3<>/dev/tcp/127.0.0.1/$p"; done
+            for p in 80 443 9100; do reaches "$p" || { echo "port $p should answer" >&2; exit 1; }; done
+            for p in 8081 9101; do if reaches "$p"; then echo "port $p should not answer" >&2; exit 1; fi; done
+          }
+          check
+          sudo podman exec circuit-firewall sh -c 'if command -v firewall-cmd >/dev/null; then systemctl restart firewalld; else ufw reload; fi'
+          check
       - name: Clean up
         if: always()
         working-directory: examples/local
