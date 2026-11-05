@@ -84,10 +84,15 @@ jobs:
           done
           sleep 2
           reaches() { timeout 5 bash -c "exec 3<>/dev/tcp/$ip/$1" 2>/dev/null; }
+          # On a failure, show what the host's firewall had loaded at that
+          # moment, since a re-run rarely catches it again.
+          state() {
+            sudo podman exec circuit-firewall sh -c 'date -u +%T.%N; if command -v firewall-cmd >/dev/null; then systemctl status --no-pager firewalld | head -5; firewall-cmd --state; firewall-cmd --list-all; else ufw status verbose; fi; nft list ruleset' >&2 || true
+          }
           check() {
             for p in 8081 9101; do sudo podman exec circuit-firewall bash -c "exec 3<>/dev/tcp/127.0.0.1/$p"; done
-            for p in 80 443 9100; do reaches "$p" || { echo "port $p should answer" >&2; exit 1; }; done
-            for p in 8081 9101; do if reaches "$p"; then echo "port $p should not answer" >&2; exit 1; fi; done
+            for p in 80 443 9100; do reaches "$p" || { echo "port $p should answer" >&2; state; exit 1; }; done
+            for p in 8081 9101; do if reaches "$p"; then echo "port $p should not answer" >&2; state; sleep 5; reaches "$p" && echo "still answers 5s later" >&2 || echo "shut 5s later" >&2; exit 1; fi; done
           }
           check
           sudo podman exec circuit-firewall sh -c 'if command -v firewall-cmd >/dev/null; then systemctl restart firewalld; else ufw reload; fi'
