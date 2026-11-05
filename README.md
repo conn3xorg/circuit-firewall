@@ -10,7 +10,7 @@ The part that usually goes wrong by hand is the order. Turn ufw on before SSH is
 
 ```hcl
 module "firewall" {
-  source = "github.com/conn3xorg/circuit-firewall?ref=v0.2.1"
+  source = "github.com/conn3xorg/circuit-firewall?ref=v0.2.2"
 
   hosts                = { web1 = "203.0.113.10", web2 = "203.0.113.11" }
   ssh_private_key_file = "~/.ssh/id_ed25519"
