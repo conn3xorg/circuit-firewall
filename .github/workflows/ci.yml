@@ -104,7 +104,10 @@ jobs:
             for p in 8081 9101; do if reaches "$p"; then echo "port $p should not answer" >&2; state; sleep 5; reaches "$p" && echo "still answers 5s later" >&2 || echo "shut 5s later" >&2; exit 1; fi; done
           }
           check
-          sudo podman exec circuit-firewall sh -c 'if command -v firewall-cmd >/dev/null; then systemctl restart firewalld; else ufw reload; fi'
+          # systemctl restart returns before firewalld has loaded its rules,
+          # and checking in that window sees no firewall. Wait until it's
+          # running, up to 30 seconds.
+          sudo podman exec circuit-firewall sh -c 'if command -v firewall-cmd >/dev/null; then systemctl restart firewalld && for _ in $(seq 30); do [ "$(firewall-cmd --state 2>/dev/null)" = running ] && exit 0; sleep 1; done; exit 1; else ufw reload && for _ in $(seq 30); do ufw status | grep -qx "Status: active" && exit 0; sleep 1; done; exit 1; fi' || { echo "the firewall didn't come back within 30s" >&2; state; exit 1; }
           check
       - name: Clean up
         if: always()
