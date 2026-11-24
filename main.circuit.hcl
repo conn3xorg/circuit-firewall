@@ -42,6 +42,9 @@ locals {
     ) if r.from != null
   }
 
+  # Empty when default_zone is null, so firewalld's own default zone is used.
+  zone_opt = var.default_zone == null ? "" : "--zone=${var.default_zone} "
+
   ufw_hosts       = { for name, h in var.hosts : name => h if local.family[name] == "debian" }
   firewalld_hosts = { for name, h in var.hosts : name => h if local.family[name] == "redhat" }
 }
@@ -112,14 +115,16 @@ circuit "firewalld" {
     }
   }
 
-  # firewalld starts with the default zone's rules, which allow SSH on
-  # port 22 and deny everything else. SSH on another port is opened before
-  # firewalld starts, or starting it would cut the connection.
+  # The order keeps SSH open at every step. firewalld starts with the
+  # default zone's rules, which allow SSH on port 22 in public. SSH on
+  # another port is opened in default_zone before firewalld starts, and
+  # SSH is open in default_zone before it becomes the default, so neither
+  # starting firewalld nor switching zones can cut the connection.
   step "ssh_before_start" {
     for_each = setsubtract(local.ssh_ports, ["22/tcp"])
     command {
-      command = "firewall-offline-cmd -q --add-port=${item.value}"
-      unless  = "firewall-offline-cmd -q --query-port=${item.value}"
+      command = "firewall-offline-cmd -q ${local.zone_opt}--add-port=${item.value}"
+      unless  = "firewall-offline-cmd -q ${local.zone_opt}--query-port=${item.value}"
     }
   }
 
@@ -134,13 +139,26 @@ circuit "firewalld" {
   step "ssh" {
     for_each = local.ssh_ports
     firewalld {
+      zone = var.default_zone
       port = item.value
+    }
+  }
+
+  # Some images ship a default zone of trusted, which accepts everything,
+  # such as Google Cloud's Rocky Linux. --set-default-zone changes the
+  # running firewall and the permanent one.
+  step "default_zone" {
+    for_each = var.default_zone == null ? toset([]) : toset([var.default_zone])
+    command {
+      command = "firewall-cmd -q --set-default-zone=${item.value}"
+      unless  = "[ \"$(firewall-cmd --get-default-zone)\" = ${item.value} ]"
     }
   }
 
   step "rules" {
     for_each = { for k, r in local.rules : k => r if r.from == null }
     firewalld {
+      zone = var.default_zone
       # firewalld writes a range as 6000-6007, ufw as 6000:6007.
       port = replace(item.value.port, ":", "-")
     }
@@ -149,8 +167,8 @@ circuit "firewalld" {
   step "rich_rules" {
     for_each = local.rich
     command {
-      command = "firewall-cmd -q --add-rich-rule='${item.value}' && firewall-cmd -q --permanent --add-rich-rule='${item.value}'"
-      unless  = "firewall-cmd -q --query-rich-rule='${item.value}' && firewall-cmd -q --permanent --query-rich-rule='${item.value}'"
+      command = "firewall-cmd -q ${local.zone_opt}--add-rich-rule='${item.value}' && firewall-cmd -q --permanent ${local.zone_opt}--add-rich-rule='${item.value}'"
+      unless  = "firewall-cmd -q ${local.zone_opt}--query-rich-rule='${item.value}' && firewall-cmd -q --permanent ${local.zone_opt}--query-rich-rule='${item.value}'"
     }
   }
 }

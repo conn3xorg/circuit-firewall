@@ -50,6 +50,17 @@ variable "ssh_allow" {
   }
 }
 
+variable "default_zone" {
+  type        = string
+  default     = "public"
+  description = "firewalld zone to make the default and put the rules in, such as \"public\", which denies incoming traffic except what it allows. When null, the host's default zone is left alone, which is unsafe if it's trusted, as on Google Cloud's Rocky Linux images. Applies to firewalld only: ufw has no zones."
+
+  validation {
+    condition     = var.default_zone == null || can(regex("^[A-Za-z0-9_-]{1,17}$", coalesce(var.default_zone, "-")))
+    error_message = "default_zone must be a firewalld zone name, such as \"public\": up to 17 letters, digits, - or _."
+  }
+}
+
 variable "allow" {
   type = list(object({
     port = string
